@@ -37,6 +37,17 @@ func (d *ARCDir) AddFile(file ARCFile) {
 	d.Files = append(d.Files, file)
 }
 
+// WriteFile adds a file with the specified contents to the directory.
+func (d *ARCDir) WriteFile(name string, contents []byte) {
+	file := ARCFile{
+		Filename: name,
+		Length:   len(contents),
+		Data:     contents,
+	}
+
+	d.AddFile(file)
+}
+
 // GetFile retrieves the file by the given name.
 func (d *ARCDir) GetFile(name string) (*ARCFile, error) {
 	if name == "" {
