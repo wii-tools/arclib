@@ -153,7 +153,7 @@ func Load(contents []byte) (*ARC, error) {
 	return &ARC{directories[0]}, nil
 }
 
-func (a *ARC) FileAtPath(path string) (ARCFile, error) {
+func (a *ARC) FileAtPath(path string) (*ARCFile, error) {
 	components := strings.Split(path, "/")
 
 	var dirs []string
@@ -169,11 +169,11 @@ func (a *ARC) FileAtPath(path string) (ARCFile, error) {
 	}
 
 	// The root node is where we start our loop.
-	current := a.RootRecord
+	current := &a.RootRecord
 	for _, dirName := range dirs {
 		testDir, err := current.GetDir(dirName)
 		if err != nil {
-			return ARCFile{}, err
+			return nil, err
 		}
 		current = testDir
 	}

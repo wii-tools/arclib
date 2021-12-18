@@ -1,7 +1,6 @@
 package arclib
 
 import (
-	"log"
 	"os"
 )
 
@@ -39,25 +38,31 @@ func (d *ARCDir) AddFile(file ARCFile) {
 }
 
 // GetFile retrieves the file by the given name.
-func (d *ARCDir) GetFile(name string) (ARCFile, error) {
+func (d *ARCDir) GetFile(name string) (*ARCFile, error) {
+	if name == "" {
+		return nil, os.ErrInvalid
+	}
+
 	for _, file := range d.Files {
 		if file.Filename == name {
-			return file, nil
+			return &file, nil
 		}
 	}
 
-	return ARCFile{}, os.ErrNotExist
+	return nil, os.ErrNotExist
 }
 
 // GetDir retrieves the directory by the given name.
-func (d *ARCDir) GetDir(name string) (ARCDir, error) {
-	log.Println("currently in", d.Filename)
+func (d *ARCDir) GetDir(name string) (*ARCDir, error) {
+	if name == "" {
+		return nil, os.ErrInvalid
+	}
+
 	for _, dir := range d.Subdirs {
-		log.Println("considering", dir.Filename, "for", name)
 		if dir.Filename == name {
-			return dir, nil
+			return &dir, nil
 		}
 	}
 
-	return ARCDir{}, os.ErrNotExist
+	return nil, os.ErrNotExist
 }
