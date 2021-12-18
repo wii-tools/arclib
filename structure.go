@@ -28,10 +28,10 @@ const (
 )
 
 // name returns the name as specified with offsets specified by the node.
-// It reads from the speicifed string table.
+// It reads from the specified string table.
 func (a *arcNode) name(table []byte) string {
 	// Nintendo gives us 3 bytes, a "uint24" if you will.
-	// Alright then.. we need to normalize this.
+	// Alright then... we need to normalize this.
 
 	// The Wii uses big-endian throughout every possible corner.
 	// This means that we can safely convert this to a uint32

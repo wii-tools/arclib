@@ -5,37 +5,32 @@ import (
 	"encoding/binary"
 	"errors"
 	"io/ioutil"
-	"os"
+	"strings"
 )
 
 var (
-	ErrDirectory       = errors.New("requested path is a directory")
 	ErrInvalidRootNode = errors.New("root node was not a directory")
 	ErrInvalidMagic    = errors.New("invalid ARC magic")
+	ErrUnknownNode     = errors.New("unknown node type")
 )
 
+// ARC describes a hierarchy suitable for serialization and deserialization of an ARC file.
 type ARC struct {
-	contents []ARCRecord
-}
-
-type ARCRecord struct {
-	Path string
-	Data []byte
-	Size int
-	Type ARCType
+	RootRecord ARCDir
 }
 
 // LoadFromFile reads a file and passes its contents to Load.
-func (a *ARC) LoadFromFile(path string) error {
+func LoadFromFile(path string) (*ARC, error) {
 	contents, err := ioutil.ReadFile(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return a.Load(contents)
+
+	return Load(contents)
 }
 
 // Load takes the given ARC and breaks it down into a more easily dealt with format.
-func (a *ARC) Load(contents []byte) error {
+func Load(contents []byte) (*ARC, error) {
 	m := miniRead{
 		contents: contents,
 	}
@@ -45,12 +40,12 @@ func (a *ARC) Load(contents []byte) error {
 	var header arcHeader
 	err := readToType(m.readLen(32), &header)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Simple sanity check.
 	if header.Magic != 0x55AA382D {
-		return ErrInvalidMagic
+		return nil, ErrInvalidMagic
 	}
 
 	// Read the root node. It resides 32 bytes in and has a length of 12.
@@ -58,7 +53,12 @@ func (a *ARC) Load(contents []byte) error {
 	var rootNode arcNode
 	err = readToType(m.readLen(12), &rootNode)
 	if rootNode.Type != Directory {
-		return ErrInvalidRootNode
+		return nil, ErrInvalidRootNode
+	}
+
+	// Create our root node. This will be the top directory for our returned ARC.
+	result := ARCDir{
+		childCount: rootNode.Size,
 	}
 
 	// We now need to calculate the string offset.
@@ -78,9 +78,11 @@ func (a *ARC) Load(contents []byte) error {
 	stringTable := contents[stringOffset:header.DataOffset]
 
 	// We'll store all directories we encounter.
-	var directories []arcNode
+	// The first directory will always be our root node.
+	directories := []ARCDir{result}
 
-	for size := 0; size != int(rootNode.Size); {
+	var size uint32
+	for size = 0; size != rootNode.Size; {
 		if size == 0 {
 			// This is the root node. We are not going to handle it.
 			size++
@@ -92,7 +94,7 @@ func (a *ARC) Load(contents []byte) error {
 		var currentNode arcNode
 		err = readToType(m.readLen(12), &currentNode)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Ensure it is a type we know.
@@ -101,85 +103,107 @@ func (a *ARC) Load(contents []byte) error {
 		case File:
 			break
 		default:
-			return errors.New("unknown node type")
+			return nil, ErrUnknownNode
 		}
-
-		// Iterate through all tracked directories to build hierarchy for its path.
-		path := ""
-		for _, dir := range directories {
-			path += dir.name(stringTable) + "/"
-		}
-		path += currentNode.name(stringTable)
 
 		// If this is a directory, we need to keep track of it for path purposes.
 		if currentNode.Type == Directory {
-			directories = append(directories, currentNode)
+			dir := ARCDir{
+				Filename:   currentNode.name(stringTable),
+				childCount: currentNode.Size,
+			}
+			directories = append(directories, dir)
 		}
 
 		// Evaluate if we need to remove any directories by size.
 		// If the current size is equivalent to their size, they will contain no other contents.
 		// We loop in reverse to properly remove contents.
 		for index := len(directories) - 1; index >= 0; index-- {
-			dir := directories[index]
-			if int(dir.Size) == size {
+			currentDir := directories[index]
+
+			// We cannot close the last directory if it is present.
+			// Ensure we have more than one directory before closing (the expected root node)
+			if currentDir.childCount == size && len(directories) > 1 {
+				// Add to the parent directory for hierarchy.
+				directories[len(directories)-2].AddDir(currentDir)
 				directories = remove(directories, index)
 			}
 		}
 
-		// Finally, add this recorded type to our own format.
-		record := ARCRecord{
-			// We'll add its data as nil due to the fact records can include directories.
-			Data: nil,
-			Size: int(currentNode.Size),
-			Type: currentNode.Type,
-			Path: path,
+		if rootNode.Size == size {
+			// We have finished iterating through all children.
+			break
 		}
 
-		// Add data if it is a file.
+		// Add data to the highest directory if it is a file.
 		if currentNode.Type == File {
 			contentOffset := currentNode.DataOffset
-			record.Data = contents[contentOffset : contentOffset+currentNode.Size]
-		}
+			data := contents[contentOffset : contentOffset+currentNode.Size]
+			file := ARCFile{
+				Filename: currentNode.name(stringTable),
+				Data:     data,
+				Length:   int(currentNode.Size),
+			}
 
-		a.contents = append(a.contents, record)
+			// Determine the highest directory.
+			directories[len(directories)-1].AddFile(file)
+		}
 	}
 
-	return nil
+	return &ARC{directories[0]}, nil
 }
 
-// Contents returns a list of paths of files within the ARC.
-func (a *ARC) Contents() []string {
-	var names []string
-	for _, node := range a.contents {
-		// We don't want to handle directories.
-		if node.Type == Directory {
-			continue
-		}
+func (a *ARC) FileAtPath(path string) (ARCFile, error) {
+	components := strings.Split(path, "/")
 
-		names = append(names, node.Path)
+	var dirs []string
+	var filename string
+
+	if len(components) == 1 {
+		dirs = []string{}
+		filename = components[0]
+	} else {
+		// Directories are all but the last element in our split string.
+		dirs = components[0 : len(components)-1]
+		filename = components[len(components)-1]
 	}
-	return names
+
+	// The root node is where we start our loop.
+	current := a.RootRecord
+	for _, dirName := range dirs {
+		testDir, err := current.GetDir(dirName)
+		if err != nil {
+			return ARCFile{}, err
+		}
+		current = testDir
+	}
+
+	// Retrieve our file from the last directory in our hierarchy.
+	return current.GetFile(filename)
 }
 
 // Read returns the contents of a file at the given path.
 func (a *ARC) Read(path string) ([]byte, error) {
-	for _, node := range a.contents {
-		if path != node.Path {
-			continue
-		}
-
-		// We don't want to handle directories.
-		if node.Type == Directory {
-			return nil, ErrDirectory
-		}
-
-		return node.Data, nil
+	file, err := a.FileAtPath(path)
+	if err != nil {
+		return nil, err
 	}
-	return nil, os.ErrNotExist
+
+	return file.Data, nil
+}
+
+// Size returns the size in bytes of the file for the given path.
+func (a *ARC) Size(path string) (int, error) {
+	file, err := a.FileAtPath(path)
+	if err != nil {
+		return 0, err
+	}
+
+	return file.Length, nil
 }
 
 // remove removes an element from our directory slice.
-func remove(dirs []arcNode, pos int) []arcNode {
+func remove(dirs []ARCDir, pos int) []ARCDir {
 	return append(dirs[:pos], dirs[pos+1:]...)
 }
 
@@ -193,11 +217,14 @@ func readToType(src []byte, dst interface{}) error {
 	return nil
 }
 
+// miniRead exists to help with iterating through our ARC.
 type miniRead struct {
 	contents []byte
 	position int
 }
 
+// readLen reads the specified length and returns its bytes.
+// Opposed to bytes.NewReader, we do not throw an error for bounds.
 func (m *miniRead) readLen(len int) []byte {
 	contents := m.contents[m.position : m.position+len]
 	m.position += len
