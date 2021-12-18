@@ -31,7 +31,7 @@ func Load(contents []byte) (*ARC, error) {
 	}
 
 	// Simple sanity check.
-	if header.Magic != 0x55AA382D {
+	if header.Magic != ARCHeader {
 		return nil, ErrInvalidMagic
 	}
 
@@ -113,7 +113,7 @@ func Load(contents []byte) (*ARC, error) {
 			if currentDir.childCount == size && len(directories) > 1 {
 				// Add to the parent directory for hierarchy.
 				directories[len(directories)-2].AddDir(currentDir)
-				directories = remove(directories, index)
+				directories = removeDir(directories, index)
 			}
 		}
 
@@ -140,8 +140,8 @@ func Load(contents []byte) (*ARC, error) {
 	return &ARC{directories[0]}, nil
 }
 
-// remove removes an element from our directory slice.
-func remove(dirs []ARCDir, pos int) []ARCDir {
+// removeDir removes an element from our directory slice.
+func removeDir(dirs []ARCDir, pos int) []ARCDir {
 	return append(dirs[:pos], dirs[pos+1:]...)
 }
 

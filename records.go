@@ -39,13 +39,22 @@ func (d *ARCDir) AddFile(file ARCFile) {
 
 // WriteFile adds a file with the specified contents to the directory.
 func (d *ARCDir) WriteFile(name string, contents []byte) {
-	file := ARCFile{
-		Filename: name,
-		Length:   len(contents),
-		Data:     contents,
-	}
+	// Determine whether this file already exists.
+	existingFile, err := d.GetFile(name)
+	if err == os.ErrNotExist {
+		// Add a new file by the given name.
+		file := ARCFile{
+			Filename: name,
+			Length:   len(contents),
+			Data:     contents,
+		}
 
-	d.AddFile(file)
+		d.AddFile(file)
+	} else {
+		// Overwrite its existing data.
+		existingFile.Data = contents
+		existingFile.Length = len(contents)
+	}
 }
 
 // GetFile retrieves the file by the given name.
@@ -76,4 +85,24 @@ func (d *ARCDir) GetDir(name string) (*ARCDir, error) {
 	}
 
 	return nil, os.ErrNotExist
+}
+
+// RecursiveCount returns the amount of files and sub-directories within.
+func (d *ARCDir) RecursiveCount() int {
+	// We start with this current record.
+	count := 1
+	// Add file count.
+	count += len(d.Files)
+
+	// Recurse through subdirectories for their sum.
+	for _, subDir := range d.Subdirs {
+		count += subDir.RecursiveCount()
+	}
+
+	return count
+}
+
+// Size returns the count of files and directories immediately within.
+func (d *ARCDir) Size() int {
+	return len(d.Files) + len(d.Subdirs)
 }

@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+const (
+	ARCHeader = 0x55AA382D
+)
+
 var (
 	ErrInvalidRootNode = errors.New("root node was not a directory")
 	ErrInvalidMagic    = errors.New("invalid ARC magic")
@@ -13,6 +17,12 @@ var (
 
 // ARC describes a hierarchy suitable for serialization and deserialization of an ARC file.
 type ARC struct {
+	// RootRecord holds the root record for this ARC.
+	//
+	// It's important to note that this root record is nameless.
+	// Many officially-provided ARCs within Nintendo games have one folder
+	// containing all data, typically named "arc".
+	// This folder has "arc" as one of its contents.
 	RootRecord ARCDir
 }
 
