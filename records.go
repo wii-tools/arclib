@@ -69,9 +69,10 @@ func (d *ARCDir) GetFile(name string) (*ARCFile, error) {
 		return nil, os.ErrInvalid
 	}
 
-	for _, file := range d.Files {
-		if file.Filename == name {
-			return &file, nil
+	for idx := range d.Files {
+		currentFile := &d.Files[idx]
+		if currentFile.Filename == name {
+			return currentFile, nil
 		}
 	}
 
@@ -84,9 +85,10 @@ func (d *ARCDir) GetDir(name string) (*ARCDir, error) {
 		return nil, os.ErrInvalid
 	}
 
-	for _, dir := range d.Subdirs {
-		if dir.Filename == name {
-			return &dir, nil
+	for idx := range d.Subdirs {
+		currentDir := &d.Subdirs[idx]
+		if currentDir.Filename == name {
+			return currentDir, nil
 		}
 	}
 
