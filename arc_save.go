@@ -12,7 +12,7 @@ type miniMuxer struct {
 	strings []byte
 	data    []byte
 
-	childCount uint32
+	recordCount uint32
 }
 
 // addString adds the given string to the strings table.
@@ -43,6 +43,7 @@ func (m *miniMuxer) addData(contents []byte) uint32 {
 
 // addRecord tracks a given record for muxing later.
 func (m *miniMuxer) addRecord(record arcNode) {
+	m.recordCount += 1
 	m.records = append(m.records, record)
 }
 
@@ -68,7 +69,7 @@ func (m *miniMuxer) addDir(dir ARCDir) {
 	m.addRecord(arcNode{
 		Type:       Directory,
 		NameOffset: pos,
-		Size:       uint32(size),
+		Size:       m.recordCount + uint32(size),
 	})
 }
 
