@@ -5,10 +5,16 @@ import (
 )
 
 type arcHeader struct {
-	Magic          uint32
+	// The magic value 0x55AA382D. See ARCHeader.
+	Magic uint32
+	// RootNodeOffset is the offset from the start of the file to the first
+	// entry - as the header is always 32 bytes/0x20 in size, it is always
+	// 32 bytes/0x20.
 	RootNodeOffset uint32
-	HeaderSize     uint32
-	DataOffset     uint32
+	// HeaderSize is the size of all records and the strings table.
+	HeaderSize uint32
+	// DataOffset is RootNodeOffset + HeaderSize + alignment to 64 bytes/0x40.
+	DataOffset uint32
 	// Padding
 	_ [16]byte
 }

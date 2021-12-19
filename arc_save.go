@@ -34,7 +34,6 @@ func (m *miniMuxer) addString(value string) [3]byte {
 }
 
 // addData adds the given string to the data table.
-// It returns the offset within for usage within node tracking.
 func (m *miniMuxer) addData(contents []byte) uint32 {
 	pos := len(m.data)
 	m.data = append(m.data, contents...)
@@ -110,29 +109,39 @@ func (m *miniMuxer) recurseDir(dir ARCDir) {
 func (a *ARC) Save() ([]byte, error) {
 	m := new(miniMuxer)
 
-	// Create record binary types.
+	// Iterate through our hierarchy and record binary types.
 	m.recurseDir(a.RootRecord)
 
-	// Alignment padding for data.
-	alignment := 64 - (len(m.strings) % 64)
-	padding := make([]byte, alignment)
+	// Records are 12 bytes each. The count of all records * 12 represents their length.
+	recordLen := 12 * len(m.records)
+	headerSize := recordLen + len(m.strings)
 
+	// Our data offset is the header size (32) + size of records and strings.
+	dataOffset := 32 + headerSize
+
+	header := arcHeader{
+		Magic: ARCHeader,
+		// Our root node 32 bytes.
+		RootNodeOffset: 32,
+		HeaderSize:     uint32(headerSize),
+		DataOffset:     uint32(dataOffset),
+	}
+
+	// Update all data offsets now that we have calculated the proper offset.
+	// Data offsets are the offset from the very start of the archive.
+	for idx, record := range m.records {
+		if record.Type == File {
+			record.DataOffset += uint32(dataOffset)
+		}
+
+		m.records[idx] = record
+	}
 	records, err := m.recordsToBytes()
 	if err != nil {
 		return nil, err
 	}
 
-	headerSize := uint32(len(records) + len(m.strings))
-	dataOffset := uint32(32) + headerSize
-
-	header := arcHeader{
-		Magic: ARCHeader,
-		// Always 32 bytes.
-		RootNodeOffset: 32,
-		HeaderSize:     headerSize,
-		DataOffset:     dataOffset,
-	}
-
+	// Serialize our header for writing.
 	headerBytes, err := writeToBytes(header)
 	if err != nil {
 		return nil, err
@@ -142,7 +151,6 @@ func (a *ARC) Save() ([]byte, error) {
 	endFile = append(endFile, headerBytes...)
 	endFile = append(endFile, records...)
 	endFile = append(endFile, m.strings...)
-	endFile = append(endFile, padding...)
 	endFile = append(endFile, m.data...)
 
 	return endFile, nil
