@@ -102,26 +102,6 @@ func Load(contents []byte) (*ARC, error) {
 			directories = append(directories, dir)
 		}
 
-		// Evaluate if we need to remove any directories by size.
-		// If the current size is equivalent to their size, they will contain no other contents.
-		// We loop in reverse to properly remove contents.
-		for index := len(directories) - 1; index >= 0; index-- {
-			currentDir := directories[index]
-
-			// We cannot close the last directory if it is present.
-			// Ensure we have more than one directory before closing (the expected root node)
-			if currentDir.childCount == size && len(directories) > 1 {
-				// Add to the parent directory for hierarchy.
-				directories[len(directories)-2].AddDir(currentDir)
-				directories = removeDir(directories, index)
-			}
-		}
-
-		if rootNode.Size == size {
-			// We have finished iterating through all children.
-			break
-		}
-
 		// Add data to the highest directory if it is a file.
 		if currentNode.Type == File {
 			contentOffset := currentNode.DataOffset
@@ -134,6 +114,26 @@ func Load(contents []byte) (*ARC, error) {
 
 			// Determine the highest directory.
 			directories[len(directories)-1].AddFile(file)
+		}
+
+		// Evaluate if we need to remove any directories by size.
+		// If the current size is equivalent to their size, they will contain no other contents.
+		// We loop in reverse to properly remove contents.
+		for index := len(directories) - 1; index >= 0; index-- {
+			currentDir := directories[index]
+
+			// We cannot close the last directory if it is present.
+			// Ensure we have more than one directory before closing (the expected root node)
+			if currentDir.childCount == size && len(directories) > 1 {
+				// Add to the parent directory for hierarchy.
+				directories[index-1].AddDir(currentDir)
+				directories = removeDir(directories, index)
+			}
+		}
+
+		if rootNode.Size == size {
+			// We have finished iterating through all children.
+			break
 		}
 	}
 
