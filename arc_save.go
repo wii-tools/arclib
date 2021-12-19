@@ -56,7 +56,7 @@ func (m *miniMuxer) addFile(file ARCFile) {
 		Type:       File,
 		NameOffset: strPos,
 		DataOffset: dataPos,
-		Size:       uint32(file.Length),
+		Size:       uint32(file.Size()),
 	})
 }
 

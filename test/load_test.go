@@ -31,7 +31,7 @@ func TestRootFile(t *testing.T) {
 		t.Error(err)
 	}
 
-	rootContents, err := arc.Read("root_file")
+	rootContents, err := arc.ReadFile("root_file")
 	if err != nil {
 		t.Error(err)
 	}
@@ -47,7 +47,7 @@ func TestSubDir(t *testing.T) {
 		t.Error(err)
 	}
 
-	rootContents, err := arc.Read("subdir/sub_file")
+	rootContents, err := arc.ReadFile("subdir/sub_file")
 	if err != nil {
 		t.Error(err)
 	}

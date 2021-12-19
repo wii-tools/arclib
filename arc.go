@@ -26,7 +26,25 @@ type ARC struct {
 	RootRecord ARCDir
 }
 
-func (a *ARC) FileAtPath(path string) (*ARCFile, error) {
+// OpenDir returns the directory at the given path, or an errir if not possible.
+func (a *ARC) OpenDir(path string) (*ARCDir, error) {
+	components := strings.Split(path, "/")
+
+	// The root node is where we start our loop.
+	current := &a.RootRecord
+	for _, dirName := range components {
+		testDir, err := current.GetDir(dirName)
+		if err != nil {
+			return nil, err
+		}
+		current = testDir
+	}
+
+	return current, nil
+}
+
+// OpenFile returns a file at the given path, or an error if not possible.
+func (a *ARC) OpenFile(path string) (*ARCFile, error) {
 	components := strings.Split(path, "/")
 
 	var dirs []string
@@ -41,23 +59,24 @@ func (a *ARC) FileAtPath(path string) (*ARCFile, error) {
 		filename = components[len(components)-1]
 	}
 
-	// The root node is where we start our loop.
-	current := &a.RootRecord
-	for _, dirName := range dirs {
-		testDir, err := current.GetDir(dirName)
+	// Obtain directories leading up if needed
+	if len(dirs) != 0 {
+		dir, err := a.OpenDir(strings.Join(dirs, "/"))
 		if err != nil {
 			return nil, err
 		}
-		current = testDir
-	}
 
-	// Retrieve our file from the last directory in our hierarchy.
-	return current.GetFile(filename)
+		// Retrieve our file from the last directory in our hierarchy.
+		return dir.GetFile(filename)
+	} else {
+		// Retrieve our file from the root record.
+		return a.RootRecord.GetFile(filename)
+	}
 }
 
-// Read returns the contents of a file at the given path.
-func (a *ARC) Read(path string) ([]byte, error) {
-	file, err := a.FileAtPath(path)
+// ReadFile returns the contents of a file at the given path.
+func (a *ARC) ReadFile(path string) ([]byte, error) {
+	file, err := a.OpenFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +84,25 @@ func (a *ARC) Read(path string) ([]byte, error) {
 	return file.Data, nil
 }
 
-// Size returns the size in bytes of the file for the given path.
-func (a *ARC) Size(path string) (int, error) {
-	file, err := a.FileAtPath(path)
+// WriteFile writes the passed contents at the given path.
+func (a *ARC) WriteFile(path string, contents []byte) error {
+	file, err := a.OpenFile(path)
+	if err != nil {
+		return err
+	}
+
+	file.Write(contents)
+	return nil
+}
+
+// FileSize returns the size in bytes of the file for the given path.
+func (a *ARC) FileSize(path string) (int, error) {
+	file, err := a.OpenFile(path)
 	if err != nil {
 		return 0, err
 	}
 
-	return file.Length, nil
+	return file.Size(), nil
 }
 
 // miniRead exists to help with iterating through our ARC.

@@ -8,10 +8,18 @@ import (
 type ARCFile struct {
 	// Filename is the name of this file. It must not be empty.
 	Filename string
-	// Length is the size (in bytes) of this file.
-	Length int
 	// Data is the contents of this file.
 	Data []byte
+}
+
+// Write writes the passed contents to the given file.
+func (f *ARCFile) Write(contents []byte) {
+	f.Data = contents
+}
+
+// Size returns the size of the given file in bytes.
+func (f *ARCFile) Size() int {
+	return len(f.Data)
 }
 
 // ARCDir represents a directory available within an ARC.
@@ -45,15 +53,13 @@ func (d *ARCDir) WriteFile(name string, contents []byte) {
 		// Add a new file by the given name.
 		file := ARCFile{
 			Filename: name,
-			Length:   len(contents),
 			Data:     contents,
 		}
 
 		d.AddFile(file)
 	} else {
 		// Overwrite its existing data.
-		existingFile.Data = contents
-		existingFile.Length = len(contents)
+		existingFile.Write(contents)
 	}
 }
 

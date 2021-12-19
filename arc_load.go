@@ -109,7 +109,6 @@ func Load(contents []byte) (*ARC, error) {
 			file := ARCFile{
 				Filename: currentNode.name(stringTable),
 				Data:     data,
-				Length:   int(currentNode.Size),
 			}
 
 			// Determine the highest directory.
