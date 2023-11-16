@@ -37,6 +37,7 @@ func (m *miniMuxer) addString(value string) [3]byte {
 func (m *miniMuxer) addData(contents []byte) uint32 {
 	pos := len(m.data)
 	m.data = append(m.data, contents...)
+	m.data = append(m.data, make([]byte, 24)...)
 	return uint32(pos)
 }
 
