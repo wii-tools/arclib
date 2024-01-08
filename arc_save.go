@@ -37,7 +37,11 @@ func (m *miniMuxer) addString(value string) [3]byte {
 func (m *miniMuxer) addData(contents []byte) uint32 {
 	pos := len(m.data)
 	m.data = append(m.data, contents...)
-	m.data = append(m.data, make([]byte, 24)...)
+
+	for len(m.data)%32 != 0 {
+		m.data = append(m.data, 0)
+	}
+
 	return uint32(pos)
 }
 
@@ -61,14 +65,20 @@ func (m *miniMuxer) addFile(file ARCFile) {
 }
 
 // addDir tracks a dir as a record.
-func (m *miniMuxer) addDir(dir ARCDir) {
+func (m *miniMuxer) addDir(dir ARCDir, isRootDir bool) {
 	// The size of a directory is the count of all children it will contain.
 	size := dir.RecursiveCount()
+
+	offset := 1
+	if isRootDir {
+		offset = 0
+	}
 
 	pos := m.addString(dir.Filename)
 	m.addRecord(arcNode{
 		Type:       Directory,
 		NameOffset: pos,
+		DataOffset: uint32(offset),
 		Size:       m.recordCount + uint32(size),
 	})
 }
@@ -91,13 +101,18 @@ func (m *miniMuxer) recordsToBytes() ([]byte, error) {
 }
 
 // recurseDir iterates through the given directory and creates records for everything within.
-func (m *miniMuxer) recurseDir(dir ARCDir) {
+func (m *miniMuxer) recurseDir(dir ARCDir, isRootDir bool) {
 	// Add this directory's record.
-	m.addDir(dir)
+	m.addDir(dir, isRootDir)
 
 	// Handle sub-directories first.
 	for _, subDir := range dir.Subdirs {
-		m.recurseDir(subDir)
+		// This would be the `arc` directory.
+		if subDir.Filename == "arc" {
+			m.recurseDir(subDir, true)
+		} else {
+			m.recurseDir(subDir, false)
+		}
 	}
 
 	// Lastly, add files.
@@ -111,7 +126,15 @@ func (a *ARC) Save() ([]byte, error) {
 	m := new(miniMuxer)
 
 	// Iterate through our hierarchy and record binary types.
-	m.recurseDir(a.RootRecord)
+	m.recurseDir(a.RootRecord, true)
+
+	// Align end of string table to 32 bytes.
+	// Calculations are based off of the size of the ARC header + size of all records + size of string table
+	size := binary.Size(arcHeader{}) + len(m.records)*binary.Size(arcNode{}) + len(m.strings)
+	for size%32 != 0 {
+		m.strings = append(m.strings, 0)
+		size++
+	}
 
 	// Records are 12 bytes each. The count of all records * 12 represents their length.
 	recordLen := 12 * len(m.records)
